@@ -1,0 +1,16 @@
+{
+  "popclip version": 4151,
+  "description": "Evaluate selected text using ClipboardFormatter (MultiTool)",
+  "identifier": "com.jjk.popclip.extension.multitool",
+  "name": "MultiTool",
+  "icon": "symbol:function",
+  "version": 1,
+  "requirements": [
+    "text"
+  ],
+  "module": "multitool.js",
+  "entitlements": [
+    "dynamic"
+  ],
+  "after": "paste-result"
+}
