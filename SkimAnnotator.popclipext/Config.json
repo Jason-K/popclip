@@ -1,0 +1,34 @@
+{
+    "identifier": "com.jason.popclip.extension.skim-bookmarker",
+    "name": "Skim Bookmarker",
+    "icon": "symbol:book",
+    "actions": [
+        {
+            "title": "Add Note",
+            "icon": "symbol:text.format.size",
+            "interpreter": "/bin/bash",
+            "shell script": "osascript -l JavaScript skim_logic.js note",
+            "requiredApps": [
+                "net.sourceforge.skim-app.skim"
+            ]
+        },
+        {
+            "title": "Add Heading",
+            "icon": "symbol:text.format.size",
+            "interpreter": "/bin/bash",
+            "shell script": "osascript -l JavaScript skim_logic.js heading",
+            "requiredApps": [
+                "net.sourceforge.skim-app.skim"
+            ]
+        },
+        {
+            "title": "Add Highlight",
+            "icon": "symbol:text.format.size",
+            "interpreter": "/bin/bash",
+            "shell script": "osascript -l JavaScript skim_logic.js highlight",
+            "requiredApps": [
+                "net.sourceforge.skim-app.skim"
+            ]
+        }
+    ]
+}
