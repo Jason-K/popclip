@@ -1,15 +1,23 @@
-import { DetectorRegistry } from "./registry";
 import { ArithmeticDetector } from "./detectors/arithmetic";
+import { CombinationsDetector } from "./detectors/combinations";
+import { DateRangeDetector } from "./detectors/date-range";
+import { NavigationDetector } from "./detectors/navigation";
+import { PhoneDetector } from "./detectors/phone";
 import { TimeCalcDetector } from "./detectors/time-calc";
 import { UnitsDetector } from "./detectors/units";
-import { CombinationsDetector } from "./detectors/combinations";
-import { PhoneDetector } from "./detectors/phone";
-import { NavigationDetector } from "./detectors/navigation";
-import { DateRangeDetector } from "./detectors/date-range";
+import { DetectorRegistry } from "./registry";
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// ══════════════════════════════════════════════════════════════════════════════
+// Change this to "QSpace Pro" or "Bloom" then rebuild (npm run build)
+const FINDER_APP = "Bloom";
+// ══════════════════════════════════════════════════════════════════════════════
 
 // Extend PopClip types
 declare const popclip: {
     openUrl(url: string): void;
+    pasteText(text: string): void;
 };
 
 const registry = new DetectorRegistry();
@@ -19,6 +27,7 @@ registry.register(new TimeCalcDetector());
 registry.register(new UnitsDetector());
 registry.register(new CombinationsDetector());
 registry.register(new PhoneDetector());
+// Do not reference global popclip at module load time (not available yet)
 registry.register(new NavigationDetector());
 registry.register(new DateRangeDetector());
 
@@ -49,18 +58,23 @@ export const actions = (selection: any) => {
     if (matchId === "navigation") {
         // Check if it looks like a file path
         if (result.startsWith("/") || result.startsWith("~") || result.startsWith(".")) {
-            // Encode path parts to handle spaces
-            const encPath = encodeURI(result);
             return {
                 title: "Open in Finder",
                 icon: null,
-                code: () => popclip.openUrl("file://" + encPath),
+                after: "nothing",
+                // Use file:// URL which will open in user's default file manager
+                // Note: This opens with system default, not Bloom/QSpace specifically
+                // PopClip's JS sandbox cannot execute shell commands directly
+                code: () => {
+                    popclip.openUrl("file://" + encodeURI(result.replace(/^~/, "/Users/jason")));
+                },
             };
         } else {
             // URL
             return {
                 title: "Open in Browser",
                 icon: null,
+                after: "nothing",
                 code: () => popclip.openUrl(encodeURI(result)),
             };
         }

@@ -1,4 +1,4 @@
-import { Detector, Context } from "../registry";
+import { Context, Detector } from "../registry";
 
 export class NavigationDetector implements Detector {
     id = "navigation";
@@ -21,7 +21,7 @@ export class NavigationDetector implements Detector {
             return url;
         }
 
-        // 2. File Path detection (Unix style for macOS) 
+        // 2. File Path detection (Unix style for macOS)
         // Absolute paths /Users/..., /System/...
         // Relative paths ~/Documents, ./Script
         if (/^(\/|~|\.)/.test(trimmed) && trimmed.length > 2) {
@@ -33,7 +33,6 @@ export class NavigationDetector implements Detector {
                 if (path.startsWith("~")) {
                     path = path.replace(/^~/, "/Users/jason");
                 }
-
                 return path;
             }
         }
