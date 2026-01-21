@@ -2,7 +2,7 @@
 // Run with: osascript -l JavaScript skim_logic.js <mode>
 
 function run(argv) {
-    const mode = argv[0]; // 'note', 'heading', 'highlight'
+    const mode = argv[0]; // 'note', 'heading1', 'heading2', 'highlight'
 
     const app = Application.currentApplication();
     app.includeStandardAdditions = true;
@@ -44,15 +44,37 @@ function run(argv) {
 
     const extractDate = (text) => {
         let dateStr = "";
-        const dateRegex = /(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/;
-        const match = text.match(dateRegex);
+        const monthMap = {
+            jan: '01', january: '01', feb: '02', february: '02', mar: '03', march: '03',
+            apr: '04', april: '04', may: '05', jun: '06', june: '06',
+            jul: '07', july: '07', aug: '08', august: '08', sep: '09', sept: '09', september: '09',
+            oct: '10', october: '10', nov: '11', november: '11', dec: '12', december: '12'
+        };
+
+        // Try alphanumeric date first (e.g., "Jan 1 2024", "January 1, 2025")
+        const alphaRegex = /(?:\s+(?:at|on|dated|from|of|for)\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{2,4})(?:\s*[-/:]\s*)?(?:\s*\d{1,2}:?\d{2})?/i;
+        let match = text.match(alphaRegex);
+
         if (match) {
-            let [_, m, d, y] = match;
+            let [fullMatch, month, d, y] = match;
+            const m = monthMap[month.toLowerCase()];
             y = parseInt(y);
             if (y < 100) y += 2000;
-            dateStr = `${y}.${m.padStart(2, '0')}.${d.padStart(2, '0')}`;
-            text = text.replace(match[0], "").replace(/\s+/g, " ").trim();
+            dateStr = `${y}.${m}.${d.padStart(2, '0')}`;
+            text = text.replace(fullMatch, "").replace(/\s+/g, " ").trim();
+        } else {
+            // Try numeric date with various separators (/, -, .)
+            const numericRegex = /(?:\s+(?:at|on|dated|from|of|for)\s+)?(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})(?:\s*[-/:]\s*)?(?:\s*\d{1,2}:?\d{2})?/;
+            match = text.match(numericRegex);
+            if (match) {
+                let [fullMatch, m, d, y] = match;
+                y = parseInt(y);
+                if (y < 100) y += 2000;
+                dateStr = `${y}.${m.padStart(2, '0')}.${d.padStart(2, '0')}`;
+                text = text.replace(fullMatch, "").replace(/\s+/g, " ").trim();
+            }
         }
+
         return { dateStr, text };
     };
 
@@ -134,10 +156,50 @@ function run(argv) {
     if (mode === 'note') {
         const d = extractDate(text);
         text = d.dateStr ? `${d.dateStr} - ${d.text}` : d.text;
-    } else if (mode === 'heading') {
-        text = `# ${text.toUpperCase()}`;
+    } else if (mode === 'heading1') {
+        // Check if text contains a date pattern
+        const hasDate = /\d{4}\.\d{2}\.\d{2}/.test(text);
+
+        // Try to extract date from the text
+        const d = extractDate(text);
+
+        if (!hasDate && !d.dateStr) {
+            // Prompt user for date
+            const dateInput = app.displayDialog('Add a date to this heading?', {
+                defaultAnswer: '',
+                buttons: ['Cancel', 'OK'],
+                defaultButton: 'OK',
+                cancelButton: 'Cancel',
+                withIcon: 'note'
+            });
+
+            if (dateInput.buttonReturned === 'OK' && dateInput.textReturned.trim()) {
+                // Parse the user input and format it as yyyy.MM.dd
+                const dateMatch = dateInput.textReturned.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+                if (dateMatch) {
+                    let [_, m, d, y] = dateMatch;
+                    y = parseInt(y);
+                    if (y < 100) y += 2000;
+                    const formattedDate = `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`;
+                    text = `${formattedDate} - ${text.toUpperCase()}`;
+                } else {
+                    text = text.toUpperCase();
+                }
+            } else {
+                text = text.toUpperCase();
+            }
+        } else if (d.dateStr) {
+            // Date was extracted, use it
+            text = `${d.dateStr} - ${d.text.toUpperCase()}`;
+        } else {
+            text = text.toUpperCase();
+        }
+
+        text = `\n\n## ${text}`;
+    } else if (mode === 'heading2') {
+        text = `\n### ${text.toUpperCase()}`;
     } else if (mode === 'highlight') {
-        text = `* ${text}`;
+        text = `\t* ${text}`;
     }
 
     const fileUrl = `file://${encodeURI(pdfPath)}`;
@@ -173,20 +235,21 @@ function run(argv) {
                 set focused of (first window whose name starts with "Anchored Note") to true
                 delay 0.1
                 -- 3 tabs to text
-                key code 48
+                key code 48 -- Tab
                 delay 0.05
-                key code 48
+                key code 48 -- Tab
                 delay 0.05
-                key code 48
+                key code 48 -- Tab
                 delay 0.1
                 -- Paste
-                key code 125 using command down
+                key code 125 using command down -- Cmd+Down
                 keystroke return
-                key code 9 using command down
+                key code 9 using command down -- Cmd+v
+                delay 0.1
             end tell
         end try`;
     } else {
-        const type = (mode === 'heading') ? 'underline note' : 'highlight note';
+        const type = (mode === 'highlight') ? 'highlight note' : 'underline note';
         asAction = `try
     tell application "Skim"
         activate
@@ -301,19 +364,22 @@ function run(argv) {
 
                 -- If note was newly opened, tab to text area
                 if openedNote then
-                    key code 48
+                    key code 48 -- Tab
                     delay 0.05
-                    key code 48
+                    key code 48 -- Tab
                     delay 0.05
-                    key code 48
+                    key code 48 -- Tab
                     delay 0.1
                 end if
 
                 -- Go to end, add spacing, and paste
-                key code 125 using {command down}
+                key code 125 using {command down} -- Cmd+Down
                 delay 0.05
                 keystroke return
-                key code 9 using {command down}
+                delay 0.1
+                -- Paste
+                key code 9 using {command down} -- Cmd+v
+                delay 0.1
             end tell
         end tell
 

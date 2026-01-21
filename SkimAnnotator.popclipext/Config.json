@@ -4,7 +4,7 @@
     "icon": "symbol:book",
     "actions": [
         {
-            "title": "Add Note",
+            "title": " New Note ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
             "shell script": "osascript -l JavaScript skim_logic.js note",
@@ -13,16 +13,25 @@
             ]
         },
         {
-            "title": "Add Heading",
+            "title": " Document Heading (##) ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js heading",
+            "shell script": "osascript -l JavaScript skim_logic.js heading1",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
         },
         {
-            "title": "Add Highlight",
+            "title": " Section Heading (###) ",
+            "icon": "symbol:text.format.size",
+            "interpreter": "/bin/bash",
+            "shell script": "osascript -l JavaScript skim_logic.js heading2",
+            "requiredApps": [
+                "net.sourceforge.skim-app.skim"
+            ]
+        },
+        {
+            "title": " Highlight ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
             "shell script": "osascript -l JavaScript skim_logic.js highlight",
