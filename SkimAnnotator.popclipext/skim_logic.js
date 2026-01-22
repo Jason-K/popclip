@@ -209,7 +209,18 @@ function run(argv) {
 
     // Backup MD
     const mdFile = pdfPath.replace(/\.pdf$/i, ".md");
-    const entry = `\n\n${text} [p.${pageNum}](${fileUrl})`;
+    // Determine formatting based on markdown line content
+    const trimmed = text.replace(/^\s+/, '');
+    const isHeading = /^#/.test(trimmed);
+    const isBullet = /^\*/.test(trimmed);
+    // Remove any leading tab before bullet for MD output only
+    const mdLine = text.replace(/^\s*\t\*\s?/, '* ');
+    // No blank line between bullets; one blank line after headings
+    const prefix = isBullet ? '' : '\n\n';
+    const suffix = isHeading ? '\n' : '';
+    // Only add hyperlink for note mode; plain text page number for others
+    const pageRef = (mode === 'note') ? `[p.${pageNum}](${fileUrl})` : `[p.${pageNum}]`;
+    const entry = `${prefix}${mdLine} ${pageRef}${suffix}`;
     // Append
     runShell(`echo ${JSON.stringify(entry)} >> "${mdFile}"`);
 

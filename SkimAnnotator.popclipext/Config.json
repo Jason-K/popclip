@@ -13,7 +13,7 @@
             ]
         },
         {
-            "title": " Document Heading (##) ",
+            "title": " Document (##) ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
             "shell script": "osascript -l JavaScript skim_logic.js heading1",
@@ -22,7 +22,7 @@
             ]
         },
         {
-            "title": " Section Heading (###) ",
+            "title": " Section (###) ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
             "shell script": "osascript -l JavaScript skim_logic.js heading2",
