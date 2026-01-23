@@ -1,10 +1,14 @@
 import { ArithmeticDetector } from "./detectors/arithmetic";
+import { AwwTtdDetector } from "./detectors/aww-ttd";
 import { CombinationsDetector } from "./detectors/combinations";
 import { DateRangeDetector } from "./detectors/date-range";
 import { NavigationDetector } from "./detectors/navigation";
+import { PdConversionDetector } from "./detectors/pd-conversion";
 import { PhoneDetector } from "./detectors/phone";
+import { RatingStandardizeDetector } from "./detectors/rating-standardize";
 import { TimeCalcDetector } from "./detectors/time-calc";
 import { UnitsDetector } from "./detectors/units";
+import { WpiExtremityDetector } from "./detectors/wpi-extremity";
 import { DetectorRegistry } from "./registry";
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -30,6 +34,11 @@ registry.register(new PhoneDetector());
 // Do not reference global popclip at module load time (not available yet)
 registry.register(new NavigationDetector());
 registry.register(new DateRangeDetector());
+// Work-specific detectors
+registry.register(new WpiExtremityDetector());
+registry.register(new PdConversionDetector());
+registry.register(new AwwTtdDetector());
+registry.register(new RatingStandardizeDetector());
 
 export const actions = (selection: any) => {
     const text = selection.text.trim();
@@ -94,6 +103,59 @@ export const actions = (selection: any) => {
             icon: null, // "symbol:phone" is standard but user wants text? "Call (415)..." is title.
             // If icon is null, PopClip shows title.
             code: () => popclip.openUrl("tel:" + result.replace(/[^\d+]/g, "")),
+        };
+    }
+
+    if (matchId === "pd_conversion") {
+        const pd = (context as any).pd;
+        if (!pd) {
+            return null;
+        }
+        // Three buttons with dynamic values
+        return [
+            {
+                title: pd.dollars,
+                icon: null,
+                code: () => pd.dollars,
+            },
+            {
+                title: pd.weeks,
+                icon: null,
+                code: () => pd.weeks,
+            },
+            {
+                title: pd.both,
+                icon: null,
+                code: () => pd.both,
+            },
+        ];
+    }
+
+    if (matchId === "aww_ttd") {
+        const a = (context as any).awwTtd;
+        if (!a) {
+            return null;
+        }
+        // Two buttons with static labels returning computed values
+        return [
+            {
+                title: "AWW -> TD rate",
+                icon: null,
+                code: () => a.awwToTd,
+            },
+            {
+                title: "TTD rate -> AWW",
+                icon: null,
+                code: () => a.ttdToAww,
+            },
+        ];
+    }
+
+    if (matchId === "rating_standardize") {
+        return {
+            title: "Standardize Rating",
+            icon: null,
+            code: () => result,
         };
     }
 
