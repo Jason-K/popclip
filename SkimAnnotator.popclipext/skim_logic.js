@@ -2,7 +2,7 @@
 // Run with: osascript -l JavaScript skim_logic.js <mode>
 
 function run(argv) {
-    const mode = argv[0]; // 'note', 'heading1', 'heading2', 'highlight'
+    const mode = argv[0]; // 'record', 'heading', 'subheading', 'highlight'
 
     const app = Application.currentApplication();
     app.includeStandardAdditions = true;
@@ -29,7 +29,15 @@ function run(argv) {
         text = text.replace(/primary treating physician/gi, 'PTP')
             .replace(/\bsigned\b/gi, '')
             .replace(/\bsigned by\b/gi, '')
-            .replace(/\bClaffev\b/gi, 'Claffey');
+            .replace(/\bmaximum medical improvement\b/gi, 'MMI')
+            .replace(/\bpermanent and stationary\b/gi, 'P&S')
+            .replace(/\bmagnetic resonance imaging\b/gi, 'MRI')
+            .replace(/\belectromyography\b/gi, 'EMG')
+            .replace(/\bnerve conduction velocity\b/gi, 'NCV')
+            .replace(/\boccupational therapy\b/gi, 'OT')
+            .replace(/\bphysical therapy\b/gi, 'PT')
+            .replace(/\bfunctional capacity evaluation\b/gi, 'FCE')
+            .replace(/\bactivities of daily living\b/gi, 'ADLs');
 
         // Provider names
         text = text.replace(/\bDr\.?\s+([A-Z][a-z]+)\s+([A-Z][a-z]+),?\s*(MD|DO|NP|PA|DC|PhD)\.?\b/gi, "Dr. $2");
@@ -153,19 +161,13 @@ function run(argv) {
 
     // --- LOGIC ---
     let text = cleanText(rawText);
-    if (mode === 'note') {
+    if (mode === 'record') {
         const d = extractDate(text);
-        text = d.dateStr ? `${d.dateStr} - ${d.text}` : d.text;
-    } else if (mode === 'heading1') {
-        // Check if text contains a date pattern
-        const hasDate = /\d{4}\.\d{2}\.\d{2}/.test(text);
+        let dateStr = d.dateStr || "";
+        let baseText = d.dateStr ? d.text : text;
 
-        // Try to extract date from the text
-        const d = extractDate(text);
-
-        if (!hasDate && !d.dateStr) {
-            // Prompt user for date
-            const dateInput = app.displayDialog('Add a date to this heading?', {
+        if (!dateStr) {
+            const dateInput = app.displayDialog('Add a date to this record?', {
                 defaultAnswer: '',
                 buttons: ['Cancel', 'OK'],
                 defaultButton: 'OK',
@@ -174,30 +176,22 @@ function run(argv) {
             });
 
             if (dateInput.buttonReturned === 'OK' && dateInput.textReturned.trim()) {
-                // Parse the user input and format it as yyyy.MM.dd
                 const dateMatch = dateInput.textReturned.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
                 if (dateMatch) {
                     let [_, m, d, y] = dateMatch;
                     y = parseInt(y);
                     if (y < 100) y += 2000;
-                    const formattedDate = `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`;
-                    text = `${formattedDate} - ${text.toUpperCase()}`;
-                } else {
-                    text = text.toUpperCase();
+                    dateStr = `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`;
                 }
-            } else {
-                text = text.toUpperCase();
             }
-        } else if (d.dateStr) {
-            // Date was extracted, use it
-            text = `${d.dateStr} - ${d.text.toUpperCase()}`;
-        } else {
-            text = text.toUpperCase();
         }
 
-        text = `\n\n## ${text}`;
-    } else if (mode === 'heading2') {
-        text = `\n### ${text.toUpperCase()}`;
+        text = dateStr ? `${dateStr} - ${baseText}` : baseText;
+        text = `# ${text}`;
+    } else if (mode === 'heading') {
+        text = `## ${text}`;
+    } else if (mode === 'subheading') {
+        text = `### ${text}`;
     } else if (mode === 'highlight') {
         text = `\t* ${text}`;
     }
@@ -209,57 +203,69 @@ function run(argv) {
 
     // Backup MD
     const mdFile = pdfPath.replace(/\.pdf$/i, ".md");
+    const mdExists = runShell(`[ -f "${mdFile}" ] && echo 1 || echo 0`).trim() === "1";
+    const mdBaseName = mdFile.split("/").pop();
     // Determine formatting based on markdown line content
     const trimmed = text.replace(/^\s+/, '');
     const isHeading = /^#/.test(trimmed);
     const isBullet = /^\*/.test(trimmed);
     // Remove any leading tab before bullet for MD output only
     const mdLine = text.replace(/^\s*\t\*\s?/, '* ');
-    // No blank line between bullets; one blank line after headings
-    const prefix = isBullet ? '' : '\n\n';
-    const suffix = isHeading ? '\n' : '';
+    // No blank line between bullets; one line break before headings/records
+    const prefix = isBullet ? '' : '\n';
+    const suffix = '';
     // Only add hyperlink for note mode; plain text page number for others
-    const pageRef = (mode === 'note') ? `[p.${pageNum}](${fileUrl})` : `[p.${pageNum}]`;
+    const pageRef = (mode === 'record') ? `[p.${pageNum}](${fileUrl})` : `[p.${pageNum}]`;
     const entry = `${prefix}${mdLine} ${pageRef}${suffix}`;
     // Append
     runShell(`echo ${JSON.stringify(entry)} >> "${mdFile}"`);
+
+    const isOpenInVSCode = () => {
+        const directScript = `tell application "Visual Studio Code"
+            try
+                repeat with d in documents
+                    try
+                        if (path of d as text) is "${mdFile}" then return "1"
+                    end try
+                end repeat
+                return "0"
+            on error
+                return "ERR"
+            end try
+        end tell`;
+
+        const directResult = runShell(`osascript -e ${JSON.stringify(directScript)}`).trim();
+        if (directResult === "1") return true;
+        if (directResult === "0") return false;
+
+        const fallbackScript = `tell application "System Events"
+            if not (exists process "Code") then return "0"
+            tell process "Code"
+                repeat with w in windows
+                    try
+                        if (name of w) contains "${mdBaseName}" then return "1"
+                    end try
+                end repeat
+            end tell
+            return "0"
+        end tell`;
+
+        const fallbackResult = runShell(`osascript -e ${JSON.stringify(fallbackScript)}`).trim();
+        return fallbackResult === "1";
+    };
+
+    if (!mdExists || !isOpenInVSCode()) {
+        runShell(`open -a "Visual Studio Code" "${mdFile}"`);
+    }
 
     // Clipboard - use printf with proper escaping for RTF
     const rtfEscaped = rtf.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
     runShell(`printf '%s' "${rtfEscaped}" | pbcopy -Prefer rtf && sleep 0.5`);
 
-    // Skim Note Creation (AS is best for this due to UI scripting reliability)
+    // Skim Annotation Creation (no anchored note edits)
     let asAction = "";
-    const cleanJSON = JSON.stringify(text); // Safe string for AS
 
-    if (mode === 'note') {
-        asAction = `tell application "Skim"
-            activate
-            tell document 1 to tell page ${pageNum}
-                set n to make note with properties {type:anchored note, text:${cleanJSON}, bounds:{0,0,0,0}}
-            end tell
-            edit n
-            delay 0.5
-        end tell
-        try
-            tell application "System Events" to tell process "Skim"
-                set focused of (first window whose name starts with "Anchored Note") to true
-                delay 0.1
-                -- 3 tabs to text
-                key code 48 -- Tab
-                delay 0.05
-                key code 48 -- Tab
-                delay 0.05
-                key code 48 -- Tab
-                delay 0.1
-                -- Paste
-                key code 125 using command down -- Cmd+Down
-                keystroke return
-                key code 9 using command down -- Cmd+v
-                delay 0.1
-            end tell
-        end try`;
-    } else {
+    if (mode === 'highlight' || mode === 'record' || mode === 'heading' || mode === 'subheading') {
         const type = (mode === 'highlight') ? 'highlight note' : 'underline note';
         asAction = `try
     tell application "Skim"
@@ -268,91 +274,12 @@ function run(argv) {
 
         set activeDoc to document 1
 
-        -- Capture the actual selection data FIRST while PDF window is still focused
+        -- Capture the selection data and apply a highlight/underline without touching notes.
         set selectionData to missing value
         try
             set selectionData to (get selection of activeDoc)
         end try
 
-        set targetWindow to missing value
-        set openedNote to false
-
-        -- Strategy 1: Find an already-open note window for the active document.
-        set openNoteWindows to {}
-        repeat with aWindow in (every window)
-            try
-                if (name of aWindow starts with "Anchored Note") and (document of aWindow is activeDoc) then
-                    set end of openNoteWindows to aWindow
-                end if
-            end try
-        end repeat
-
-        if (count of openNoteWindows) is 1 then
-            set targetWindow to item 1 of openNoteWindows
-        else if (count of openNoteWindows) > 1 then
-            set newestWindow to item 1 of openNoteWindows
-            repeat with i from 2 to (count of openNoteWindows)
-                if id of item i of openNoteWindows > id of newestWindow then
-                    set newestWindow to item i of openNoteWindows
-                end if
-            end repeat
-            set targetWindow to newestWindow
-        end if
-
-        -- Strategy 2: If no window was found, find the most recently modified anchored note.
-        if targetWindow is missing value then
-            set openedNote to true
-            set allNotes to notes of activeDoc
-            if (count of allNotes) > 0 then
-                set anchoredNotes to {}
-                repeat with aNote in allNotes
-                    try
-                        if (type of aNote as string) contains "anchor" then
-                            set end of anchoredNotes to aNote
-                        end if
-                    end try
-                end repeat
-
-                if (count of anchoredNotes) > 0 then
-                    set mostRecentNote to item 1 of anchoredNotes
-                    repeat with j from 2 to (count of anchoredNotes)
-                        if (modification date of item j of anchoredNotes) > (modification date of mostRecentNote) then
-                            set mostRecentNote to item j of anchoredNotes
-                        end if
-                    end repeat
-                    edit mostRecentNote
-                    delay 0.5
-                else
-                    tell application "System Events" to keystroke "e" using {command down, control down}
-                    delay 0.5
-                end if
-            else
-                tell application "System Events" to keystroke "e" using {command down, control down}
-                delay 0.5
-            end if
-        end if
-
-        -- Wait for note window to appear (safety loop with simpler timing)
-        set windowFound to false
-        repeat 40 times -- ~2 seconds at 0.05s intervals
-            try
-                repeat with aWindow in (every window)
-                    try
-                        if (name of aWindow starts with "Anchored Note") and (document of aWindow is activeDoc) then
-                            set targetWindow to aWindow
-                            set windowFound to true
-                            exit repeat
-                        end if
-                    end try
-                end repeat
-                if windowFound then exit repeat
-            end try
-            delay 0.05
-        end repeat
-
-        if not windowFound then error "Anchored Note window did not appear."
-
-        -- Create highlight/underline annotation with rotating color using captured selection
         if selectionData is not missing value then
             tell activeDoc
                 set highlight_colors to {{65535, 65531, 2688, 32768}, {65535, 20000, 20000, 32768}, {20000, 65535, 20000, 32768}, {20000, 40000, 65535, 32768}, {65535, 20000, 65535, 32768}, {65535, 40000, 20000, 32768}}
@@ -362,59 +289,18 @@ function run(argv) {
                 make note with data selectionData with properties {type:${type}, color:next_color}
             end tell
         end if
-
-        -- Bring note window to focus
-        set index of targetWindow to 1
-        delay 0.2
-
-        tell application "System Events"
-            tell process "Skim"
-                set noteWin to first window whose name starts with "Anchored Note"
-                set focused of noteWin to true
-                delay 0.1
-
-                -- If note was newly opened, tab to text area
-                if openedNote then
-                    key code 48 -- Tab
-                    delay 0.05
-                    key code 48 -- Tab
-                    delay 0.05
-                    key code 48 -- Tab
-                    delay 0.1
-                end if
-
-                -- Go to end, add spacing, and paste
-                key code 125 using {command down} -- Cmd+Down
-                delay 0.05
-                keystroke return
-                delay 0.1
-                -- Paste
-                key code 9 using {command down} -- Cmd+v
-                delay 0.1
-            end tell
-        end tell
-
-        -- Return focus to PDF
-        delay 0.2
-        repeat with aWindow in (every window)
-            try
-                if (document of aWindow is activeDoc) and (name of aWindow does not start with "Anchored Note") then
-                    set index of aWindow to 1
-                    exit repeat
-                end if
-            end try
-        end repeat
-
     end tell
 on error errMsg
-    display notification "Paste Error: " & errMsg with title "Skim Paster"
+    display notification "Highlight Error: " & errMsg with title "Skim Paster"
 end try`;
     }
 
     // Use a temporary file to avoid shell escaping issues with complex AppleScript
     const tmpFile = "/tmp/skim_script_" + Date.now() + ".applescript";
-    runShell(`cat > "${tmpFile}" << 'EOF'\n${asAction}\nEOF`);
-    runShell(`osascript "${tmpFile}"`);
-    runShell(`rm -f "${tmpFile}"`);
+    if (asAction) {
+        runShell(`cat > "${tmpFile}" << 'EOF'\n${asAction}\nEOF`);
+        runShell(`osascript "${tmpFile}"`);
+        runShell(`rm -f "${tmpFile}"`);
+    }
     // runShell(`sleep 0.5 && echo "asAction was ${asAction}" | pbcopy && sleep 0.5`); // For debugging
 }

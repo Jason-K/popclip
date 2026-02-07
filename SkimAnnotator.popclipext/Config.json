@@ -4,28 +4,28 @@
     "icon": "symbol:book",
     "actions": [
         {
-            "title": " New Note ",
+            "title": " New record ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js note",
+            "shell script": "osascript -l JavaScript skim_logic.js record",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
         },
         {
-            "title": " Document (##) ",
+            "title": " Heading ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js heading1",
+            "shell script": "osascript -l JavaScript skim_logic.js heading",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
         },
         {
-            "title": " Section (###) ",
+            "title": " Subheading ",
             "icon": "symbol:text.format.size",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js heading2",
+            "shell script": "osascript -l JavaScript skim_logic.js subheading",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
