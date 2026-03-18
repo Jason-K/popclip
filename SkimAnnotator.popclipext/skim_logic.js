@@ -1,226 +1,239 @@
-// Skim Logic - JXA Version
+// Skim Logic - Markdown-first workflow
 // Run with: osascript -l JavaScript skim_logic.js <mode>
 
 function run(argv) {
-    const mode = argv[0]; // 'record', 'heading', 'subheading', 'highlight'
+    const mode = argv[0] || "h2";
 
     const app = Application.currentApplication();
     app.includeStandardAdditions = true;
 
-    // --- UTILS ---
+    const notify = (message) => {
+        try {
+            app.displayNotification(message, { withTitle: "Skim Bookmarker" });
+        } catch (e) {
+            console.log(message);
+        }
+    };
+
+    const shellQuote = (value) => `'${String(value).replace(/'/g, "'\\''")}'`;
+
     const runShell = (cmd) => {
         try {
             return app.doShellScript(cmd);
         } catch (e) {
-            console.log("Shell Error: " + e.message);
+            throw new Error(e.message);
+        }
+    };
+
+    const cleanInlineText = (text) => {
+        if (!text) return "";
+
+        let output = text.replace(/^[\uFEFF\u200B\u2060]+/, "");
+        output = output.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n/g, " ");
+        output = output.replace(/\s+/g, " ").trim();
+        output = output.replace(/^[,.-]+|[,.-]+$/g, "").trim();
+
+        output = output.replace(/primary treating physician/gi, "PTP")
+            .replace(/\bsigned by\b/gi, "")
+            .replace(/\bsigned\b/gi, "")
+            .replace(/\bmaximum medical improvement\b/gi, "MMI")
+            .replace(/\bpermanent and stationary\b/gi, "P&S")
+            .replace(/\bmagnetic resonance imaging\b/gi, "MRI")
+            .replace(/\belectromyography\b/gi, "EMG")
+            .replace(/\bnerve conduction velocity\b/gi, "NCV")
+            .replace(/\boccupational therapy\b/gi, "OT")
+            .replace(/\bphysical therapy\b/gi, "PT")
+            .replace(/\bfunctional capacity evaluation\b/gi, "FCE")
+            .replace(/\bactivities of daily living\b/gi, "ADLs")
+            .replace(/\bDr\.?\s+([A-Z][a-z]+)\s+([A-Z][a-z]+),?\s*(MD|DO|NP|PA|DC|PhD)\.?\b/gi, "Dr. $2")
+            .replace(/\b(PANEL\s+)?(QUALIFIED|AGREED)\s+MEDICAL\s+EVALUAT(?:OR|ION)(S)?((\'S|S\')?)\b/gi, (m) => {
+                return m.toUpperCase().includes("QUALIFIED") ? "QME" : "AME";
+            })
+            .replace(/\s{2,}/g, " ")
+            .trim();
+
+        return output;
+    };
+
+    const fixOcrHeadingNoise = (text) => {
+        if (!text) return "";
+
+        let output = text;
+        const looksLikeHeading = /^[A-Z0-9\s&'.,:/()-]+$/.test(output) || /^[A-Z]{2,}\b/.test(output);
+        if (!looksLikeHeading) return output;
+
+        // Conservative corrections for common dropped-leading-letter OCR artifacts.
+        output = output
+            .replace(/^YPE\b/, "TYPE")
+            .replace(/^ASE\b/, "CASE")
+            .replace(/^TIPULATIONS\b/, "STIPULATIONS")
+            .replace(/^HE\s+FOLLOWING\b/, "THE FOLLOWING")
+            .replace(/^RE-TRIAL\b/, "PRE-TRIAL");
+
+        return output;
+    };
+
+    const cleanQuoteText = (text) => {
+        if (!text) return "";
+
+        const lines = text
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n")
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .map((line) => cleanInlineText(line));
+
+        return lines.join("\n");
+    };
+
+    const escapeRtf = (text) => text
+        .replace(/\\/g, "\\\\")
+        .replace(/{/g, "\\{")
+        .replace(/}/g, "\\}")
+        .replace(/\n/g, "\\line ");
+
+    const generateRTF = (plainText, pageNum, url) => {
+        const escapedText = escapeRtf(plainText);
+        const escapedUrl = escapeRtf(url || "");
+        const content = url
+            ? `${escapedText} ({\\field{\\*\\fldinst{HYPERLINK "${escapedUrl}"}}{\\fldrslt p.${pageNum}}})`
+            : `${escapedText} (p.${pageNum})`;
+
+        return `{\\rtf1\\ansi\\ansicpg1252\n{\\fonttbl\\f0\\fswiss\\fcharset0 Helvetica;}\n\\f0\\fs24 ${content}}`;
+    };
+
+    const metadataValue = (value) => {
+        const normalized = String(value || "").replace(/\s+/g, " ").trim();
+        if (!normalized) return '""';
+        return `"${normalized.replace(/"/g, "'")}"`;
+    };
+
+    const buildMetadataComment = ({ source, page, subdoc, modeValue }) => {
+        const pieces = [
+            `source:${metadataValue(source)}`,
+            `page:${Number.isFinite(page) ? page : 0}`,
+            `subdoc:${metadataValue(subdoc || "")}`,
+            `mode:${metadataValue(modeValue)}`
+        ];
+        return `<!-- ${pieces.join(" ")} -->`;
+    };
+
+    const promptSubdocument = (defaultValue) => {
+        const result = app.displayDialog("Subdocument label", {
+            defaultAnswer: defaultValue || "",
+            buttons: ["Cancel", "Use"],
+            defaultButton: "Use",
+            cancelButton: "Cancel",
+            withIcon: "note"
+        });
+
+        return (result.textReturned || "").trim();
+    };
+
+    const detectSubdocumentFromText = (text) => {
+        const clean = cleanInlineText(text);
+        if (!clean) return "";
+
+        const sentence = clean.split(/[.;:!?]/)[0].trim();
+        const words = sentence.split(/\s+/).slice(0, 8).join(" ");
+        return words;
+    };
+
+    const loadState = (statePath) => {
+        try {
+            const raw = runShell(`cat ${shellQuote(statePath)}`);
+            return JSON.parse(raw);
+        } catch (e) {
+            return {};
+        }
+    };
+
+    const saveState = (statePath, state) => {
+        const json = JSON.stringify(state);
+        runShell(`printf '%s' ${shellQuote(json)} > ${shellQuote(statePath)}`);
+    };
+
+    const extractSkimData = () => {
+        const getDataScript = `tell application "Skim"
+            if not (exists front document) then return "||0||"
+            set d to front document
+            set pdfPath to POSIX path of (path of d as string)
+            set pageNum to index of current page of d
+            set selectedText to ""
+            try
+                set selectedText to (selection of d as string)
+            end try
+            return pdfPath & "||" & pageNum & "||" & selectedText
+        end tell`;
+
+        const output = runShell(`osascript -e ${shellQuote(getDataScript)}`);
+        const parts = output.split("||");
+
+        return {
+            pdfPath: (parts[0] || "").trim(),
+            pageNum: parseInt(parts[1], 10),
+            rawText: parts.slice(2).join("||")
+        };
+    };
+
+    const renderEntry = ({ modeValue, cleanedInline, cleanedQuote, pageNum, fileUrl, pdfName, subdoc }) => {
+        const pageRef = `[p.${pageNum}]`;
+        let visible = "";
+
+        const headingText = fixOcrHeadingNoise(cleanedInline);
+
+        if (modeValue === "doc_header") {
+            const docHeading = subdoc || headingText || pdfName;
+            visible = `# ${docHeading}\n[${pdfName}](${fileUrl})`;
+            return { visible, includeMetadata: false };
+        }
+
+        if (modeValue === "h2" || modeValue === "h3" || modeValue === "h4" || modeValue === "h5" || modeValue === "h6") {
+            const level = Number(modeValue.slice(1));
+            const hashes = "#".repeat(level);
+            visible = `${hashes} ${headingText} ${pageRef}`;
+            return { visible, includeMetadata: true };
+        }
+
+        if (modeValue === "blockquote") {
+            const quotedLines = (cleanedQuote || cleanedInline)
+                .split("\n")
+                .map((line) => `> ${line}`)
+                .join("\n");
+            visible = `${quotedLines}\n> ${pageRef}`;
+            return { visible, includeMetadata: true };
+        }
+
+        if (modeValue === "inline_quote") {
+            visible = `\"${headingText}\" ${pageRef}`;
+            return { visible, includeMetadata: true };
+        }
+
+        // highlight fallback
+        visible = `* ${headingText} ${pageRef}`;
+        return { visible, includeMetadata: true };
+    };
+
+    const normalizeEntryBlock = (value) => String(value || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .trim();
+
+    const getLastEntryBlock = (mdFile) => {
+        try {
+            const tail = runShell(`tail -n 80 ${shellQuote(mdFile)} 2>/dev/null || true`);
+            const normalizedTail = tail.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+            if (!normalizedTail) return "";
+
+            const blocks = normalizedTail.split(/\n\s*\n+/).map((item) => item.trim()).filter(Boolean);
+            return blocks.length ? blocks[blocks.length - 1] : "";
+        } catch (e) {
             return "";
         }
     };
 
-    // --- TEXT CLEANING ---
-    const cleanText = (text) => {
-        if (!text) return "";
-        text = text.replace(/^[\uFEFF\u200B\u2060]+/, "");
-        text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n/g, " ");
-        text = text.replace(/\s+/g, " ");
-        text = text.replace(/^[\s,.-]+|[\s,.-]+$/g, "");
-
-        // Substitutions
-        text = text.replace(/primary treating physician/gi, 'PTP')
-            .replace(/\bsigned\b/gi, '')
-            .replace(/\bsigned by\b/gi, '')
-            .replace(/\bmaximum medical improvement\b/gi, 'MMI')
-            .replace(/\bpermanent and stationary\b/gi, 'P&S')
-            .replace(/\bmagnetic resonance imaging\b/gi, 'MRI')
-            .replace(/\belectromyography\b/gi, 'EMG')
-            .replace(/\bnerve conduction velocity\b/gi, 'NCV')
-            .replace(/\boccupational therapy\b/gi, 'OT')
-            .replace(/\bphysical therapy\b/gi, 'PT')
-            .replace(/\bfunctional capacity evaluation\b/gi, 'FCE')
-            .replace(/\bactivities of daily living\b/gi, 'ADLs');
-
-        // Provider names
-        text = text.replace(/\bDr\.?\s+([A-Z][a-z]+)\s+([A-Z][a-z]+),?\s*(MD|DO|NP|PA|DC|PhD)\.?\b/gi, "Dr. $2");
-
-        // Medical
-        text = text.replace(/\b(PANEL\s+)?(QUALIFIED|AGREED)\s+MEDICAL\s+EVALUAT(?:OR|ION)(S)?((\'S|S\')?)\b/gi, (m) => {
-            return m.toUpperCase().includes('QUALIFIED') ? 'QME' : 'AME';
-        });
-
-        return text;
-    };
-
-    const extractDate = (text) => {
-        let dateStr = "";
-        const monthMap = {
-            jan: '01', january: '01', feb: '02', february: '02', mar: '03', march: '03',
-            apr: '04', april: '04', may: '05', jun: '06', june: '06',
-            jul: '07', july: '07', aug: '08', august: '08', sep: '09', sept: '09', september: '09',
-            oct: '10', october: '10', nov: '11', november: '11', dec: '12', december: '12'
-        };
-
-        // Try alphanumeric date first (e.g., "Jan 1 2024", "January 1, 2025")
-        const alphaRegex = /(?:\s+(?:at|on|dated|from|of|for)\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{2,4})(?:\s*[-/:]\s*)?(?:\s*\d{1,2}:?\d{2})?/i;
-        let match = text.match(alphaRegex);
-
-        if (match) {
-            let [fullMatch, month, d, y] = match;
-            const m = monthMap[month.toLowerCase()];
-            y = parseInt(y);
-            if (y < 100) y += 2000;
-            dateStr = `${y}.${m}.${d.padStart(2, '0')}`;
-            text = text.replace(fullMatch, "").replace(/\s+/g, " ").trim();
-        } else {
-            // Try numeric date with various separators (/, -, .)
-            const numericRegex = /(?:\s+(?:at|on|dated|from|of|for)\s+)?(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})(?:\s*[-/:]\s*)?(?:\s*\d{1,2}:?\d{2})?/;
-            match = text.match(numericRegex);
-            if (match) {
-                let [fullMatch, m, d, y] = match;
-                y = parseInt(y);
-                if (y < 100) y += 2000;
-                dateStr = `${y}.${m.padStart(2, '0')}.${d.padStart(2, '0')}`;
-                text = text.replace(fullMatch, "").replace(/\s+/g, " ").trim();
-            }
-        }
-
-        return { dateStr, text };
-    };
-
-    const generateRTF = (text, pageNum, url) => {
-        const escapedText = text.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}');
-        const content = url ?
-            `${escapedText} ({\\field{\\*\\fldinst{HYPERLINK "${url}"}}{\\fldrslt p.${pageNum}}})` :
-            `${escapedText} (p.${pageNum})`;
-
-        return `{\\rtf1\\ansi\\ansicpg1252\\cocoartf2709
-{\\fonttbl\\f0\\fswiss\\fcharset0 Helvetica;}
-{\\colortbl;\\red255\\green255\\blue255;}
-\\pard\\tx560\\pardirnatural\\partightenfactor0
-\\f0\\fs24 \\cf0 ${content}}`;
-    };
-
-    // --- SKIM INTERACTION ---
-    const skim = Application("Skim");
-    if (!skim.documents.length) return;
-
-    const doc = skim.documents[0];
-    const rawPath = doc.path(); // Returns POSIX path string directly in JXA? usually
-    // JXA file handling can be tricky. doc.path() often fails if not saved.
-    // doc.file() returns generic object.
-    // Safe bet:
-    let pdfPath = "";
-    try {
-        pdfPath = doc.file().toString(); // Returns path string
-    } catch (e) {
-        // Fallback or error
-    }
-
-    // Page Index
-    const pageIndex = doc.currentPage().index(); // 1-based? Skim AS is 1-based usually. JXA?
-    // Let's assume Skim provides proper index access.
-    // AS `index of current page` -> `doc.currentPage().index()`
-    // Actually, `currentPage` returns a Page object.
-    // In JXA, properties are accessed via methods e.g. `doc.currentPage()`?
-    // Wait, standard OSA properties: `doc.currentPage`.
-
-    // CRITICAL: JXA syntax for Skim properties.
-    // Skim sdef: `property current page : page`
-    // `page` has `property index : integer`
-    // So: `doc.currentPage().index()` is likely correct for JXA getter.
-    // But sometimes it is `doc.currentPage.index`.
-
-    // Selection
-    // `selection` property of document.
-    let selText = "";
-    const sel = doc.selection(); // This gives a list of selections (usually rects/page) or text?
-    // In AS `selection of document 1` returns list of specific selection objects.
-    // Coercing to string: `selection as string` works in AS.
-    // In JXA: `doc.selection()` returns array.
-    // getting text content might require `doc.selection().get()[0].text()`? No.
-    // Using `doc.selection().join(' ')`?
-
-    // To be safe and avoid JXA specific object complexities for "Selection as String",
-    // I will use a tiny internal AS block for just extracting the data string,
-    // OR we trust `app.doShellScript` calling `osascript -e` for the extraction part if JXA is flaky.
-    // Mixing JXA and AS is messy.
-    // Let's stick to JXA where possible:
-    // `skim.documents[0].selection().map(s => s.get()).join('')` ??
-
-    // Fallback: Using `doShellScript` for reliable Data Extraction from Skim (AS is more robust for coercion).
-    // It's cleaner given we are already running via osascript.
-
-    const getDataScript = `tell application "Skim"
-        set d to front document
-        return (POSIX path of (path of d as string)) & "||" & (index of current page of d) & "||" & (selection of d as string)
-    end tell`;
-    const dataParts = runShell(`osascript -e '${getDataScript}'`).split("||");
-
-    pdfPath = dataParts[0];
-    const pageNum = parseInt(dataParts[1]); // AS returns 1-based index
-    const rawText = dataParts[2];
-
-    // --- LOGIC ---
-    let text = cleanText(rawText);
-    if (mode === 'record') {
-        const d = extractDate(text);
-        let dateStr = d.dateStr || "";
-        let baseText = d.dateStr ? d.text : text;
-
-        if (!dateStr) {
-            const dateInput = app.displayDialog('Add a date to this record?', {
-                defaultAnswer: '',
-                buttons: ['Cancel', 'OK'],
-                defaultButton: 'OK',
-                cancelButton: 'Cancel',
-                withIcon: 'note'
-            });
-
-            if (dateInput.buttonReturned === 'OK' && dateInput.textReturned.trim()) {
-                const dateMatch = dateInput.textReturned.match(/(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
-                if (dateMatch) {
-                    let [_, m, d, y] = dateMatch;
-                    y = parseInt(y);
-                    if (y < 100) y += 2000;
-                    dateStr = `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`;
-                }
-            }
-        }
-
-        text = dateStr ? `${dateStr} - ${baseText}` : baseText;
-        text = `# ${text}`;
-    } else if (mode === 'heading') {
-        text = `## ${text}`;
-    } else if (mode === 'subheading') {
-        text = `### ${text}`;
-    } else if (mode === 'highlight') {
-        text = `\t* ${text}`;
-    }
-
-    const fileUrl = `file://${encodeURI(pdfPath)}`;
-    const rtf = generateRTF(text, pageNum, fileUrl);
-
-    // --- ACTIONS ---
-
-    // Backup MD
-    const mdFile = pdfPath.replace(/\.pdf$/i, ".md");
-    const mdExists = runShell(`[ -f "${mdFile}" ] && echo 1 || echo 0`).trim() === "1";
-    const mdBaseName = mdFile.split("/").pop();
-    // Determine formatting based on markdown line content
-    const trimmed = text.replace(/^\s+/, '');
-    const isHeading = /^#/.test(trimmed);
-    const isBullet = /^\*/.test(trimmed);
-    // Remove any leading tab before bullet for MD output only
-    const mdLine = text.replace(/^\s*\t\*\s?/, '* ');
-    // No blank line between bullets; one line break before headings/records
-    const prefix = isBullet ? '' : '\n';
-    const suffix = '';
-    // Only add hyperlink for note mode; plain text page number for others
-    const pageRef = (mode === 'record') ? `[p.${pageNum}](${fileUrl})` : `[p.${pageNum}]`;
-    const entry = `${prefix}${mdLine} ${pageRef}${suffix}`;
-    // Append
-    runShell(`echo ${JSON.stringify(entry)} >> "${mdFile}"`);
-
-    const isOpenInVSCode = () => {
+    const isOpenInVSCode = (mdFile, mdBaseName) => {
         const directScript = `tell application "Visual Studio Code"
             try
                 repeat with d in documents
@@ -234,7 +247,7 @@ function run(argv) {
             end try
         end tell`;
 
-        const directResult = runShell(`osascript -e ${JSON.stringify(directScript)}`).trim();
+        const directResult = runShell(`osascript -e ${shellQuote(directScript)}`).trim();
         if (directResult === "1") return true;
         if (directResult === "0") return false;
 
@@ -250,32 +263,23 @@ function run(argv) {
             return "0"
         end tell`;
 
-        const fallbackResult = runShell(`osascript -e ${JSON.stringify(fallbackScript)}`).trim();
+        const fallbackResult = runShell(`osascript -e ${shellQuote(fallbackScript)}`).trim();
         return fallbackResult === "1";
     };
 
-    if (!mdExists || !isOpenInVSCode()) {
-        runShell(`open -a "Visual Studio Code" "${mdFile}"`);
-    }
+    const createSkimAnnotation = (modeValue) => {
+        const noteType = (modeValue === "highlight" || modeValue === "blockquote" || modeValue === "inline_quote")
+            ? "highlight note"
+            : "underline note";
 
-    // Clipboard - use printf with proper escaping for RTF
-    const rtfEscaped = rtf.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
-    runShell(`printf '%s' "${rtfEscaped}" | pbcopy -Prefer rtf && sleep 0.5`);
-
-    // Skim Annotation Creation (no anchored note edits)
-    let asAction = "";
-
-    if (mode === 'highlight' || mode === 'record' || mode === 'heading' || mode === 'subheading') {
-        const type = (mode === 'highlight') ? 'highlight note' : 'underline note';
-        asAction = `try
+        const asAction = `try
     tell application "Skim"
         activate
         if not (exists document 1) then error "No PDF document is open in Skim."
 
         set activeDoc to document 1
-
-        -- Capture the selection data and apply a highlight/underline without touching notes.
         set selectionData to missing value
+
         try
             set selectionData to (get selection of activeDoc)
         end try
@@ -286,21 +290,118 @@ function run(argv) {
                 set note_count to count of notes
                 set color_index to ((note_count mod 6) + 1)
                 set next_color to item color_index of highlight_colors
-                make note with data selectionData with properties {type:${type}, color:next_color}
+                make note with data selectionData with properties {type:${noteType}, color:next_color}
             end tell
         end if
     end tell
 on error errMsg
-    display notification "Highlight Error: " & errMsg with title "Skim Paster"
+    display notification "Highlight Error: " & errMsg with title "Skim Bookmarker"
 end try`;
-    }
 
-    // Use a temporary file to avoid shell escaping issues with complex AppleScript
-    const tmpFile = "/tmp/skim_script_" + Date.now() + ".applescript";
-    if (asAction) {
-        runShell(`cat > "${tmpFile}" << 'EOF'\n${asAction}\nEOF`);
-        runShell(`osascript "${tmpFile}"`);
-        runShell(`rm -f "${tmpFile}"`);
+        const tmpFile = `/tmp/skim_script_${Date.now()}_${Math.floor(Math.random() * 100000)}.applescript`;
+        runShell(`cat > ${shellQuote(tmpFile)} << 'EOF'\n${asAction}\nEOF`);
+        runShell(`osascript ${shellQuote(tmpFile)}`);
+        runShell(`rm -f ${shellQuote(tmpFile)}`);
+    };
+
+    try {
+        const skim = Application("Skim");
+        if (!skim.running()) {
+            notify("Skim is not running.");
+            return;
+        }
+
+        const skimData = extractSkimData();
+        const pdfPath = skimData.pdfPath;
+        const pageNum = skimData.pageNum;
+        const rawText = skimData.rawText || "";
+
+        if (!pdfPath || !Number.isFinite(pageNum)) {
+            notify("Could not read PDF path or page from Skim.");
+            return;
+        }
+
+        if (mode !== "doc_header" && !rawText.trim()) {
+            notify("No selected text in Skim.");
+            return;
+        }
+
+        const mdFile = pdfPath.replace(/\.pdf$/i, ".md");
+        const mdBaseName = mdFile.split("/").pop() || "";
+        const pdfName = pdfPath.split("/").pop() || "source.pdf";
+        const fileUrl = `file://${encodeURI(pdfPath)}`;
+        const statePath = "/tmp/skim_bookmarker_state.json";
+
+        const cleanedInline = cleanInlineText(rawText);
+        const cleanedQuote = cleanQuoteText(rawText);
+
+        const state = loadState(statePath);
+        const priorSubdoc = state[pdfPath] || "";
+
+        let subdoc = priorSubdoc;
+        if (mode === "doc_header" || mode === "h2") {
+            const guessed = detectSubdocumentFromText(rawText);
+            const defaultSubdoc = guessed || priorSubdoc || cleanedInline || pdfName;
+            try {
+                subdoc = promptSubdocument(defaultSubdoc);
+            } catch (e) {
+                // User canceled the prompt.
+                return;
+            }
+
+            if (subdoc) {
+                state[pdfPath] = subdoc;
+                saveState(statePath, state);
+            }
+        }
+
+        const rendered = renderEntry({
+            modeValue: mode,
+            cleanedInline,
+            cleanedQuote,
+            pageNum,
+            fileUrl,
+            pdfName,
+            subdoc
+        });
+
+        const metadata = buildMetadataComment({
+            source: pdfName,
+            page: pageNum,
+            subdoc,
+            modeValue: mode
+        });
+
+        const entry = rendered.includeMetadata
+            ? `\n${rendered.visible}\n${metadata}`
+            : `\n${rendered.visible}`;
+
+        const candidateBlock = normalizeEntryBlock(rendered.includeMetadata
+            ? `${rendered.visible}\n${metadata}`
+            : rendered.visible);
+
+        const lastEntryBlock = getLastEntryBlock(mdFile);
+        if (candidateBlock && candidateBlock === normalizeEntryBlock(lastEntryBlock)) {
+            notify(`Skipped duplicate capture for page ${pageNum}.`);
+            return;
+        }
+
+        runShell(`printf '%s\n' ${shellQuote(entry)} >> ${shellQuote(mdFile)}`);
+
+        const clipboardText = rendered.visible.replace(/\n+/g, " ").trim();
+        const rtf = generateRTF(clipboardText, pageNum, fileUrl);
+        runShell(`printf '%s' ${shellQuote(rtf)} | pbcopy -Prefer rtf`);
+
+        createSkimAnnotation(mode);
+
+        const mdExists = runShell(`[ -f ${shellQuote(mdFile)} ] && echo 1 || echo 0`).trim() === "1";
+        if (!mdExists || !isOpenInVSCode(mdFile, mdBaseName)) {
+            runShell(`open -a "Visual Studio Code" ${shellQuote(mdFile)}`);
+        }
+
+        notify(`Captured page ${pageNum} to ${mdBaseName}.`);
+    } catch (e) {
+        notify(`Export failed: ${e.message}`);
+        console.log(e.message);
     }
-    // runShell(`sleep 0.5 && echo "asAction was ${asAction}" | pbcopy && sleep 0.5`); // For debugging
 }
