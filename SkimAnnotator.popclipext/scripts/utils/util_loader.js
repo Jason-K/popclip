@@ -3,17 +3,21 @@ function loadSkimUtilityBundle(deps) {
     const shellQuote = deps.shellQuote;
     const scriptDir = deps.scriptDir;
 
-    const loadUtilityScript = (fileName) => {
+    const loadUtilityFactory = (fileName, factoryName) => {
         const utilPath = `${scriptDir}/${fileName}`;
         const source = runShell(`cat ${shellQuote(utilPath)}`);
-        eval(source);
+        const factory = eval(`${source}\n${factoryName};`);
+        if (typeof factory !== "function") {
+            throw new Error(`Utility factory ${factoryName} was not defined by ${fileName}.`);
+        }
+        return factory;
     };
 
-    loadUtilityScript("util_ocr.js");
-    loadUtilityScript("util_date.js");
-    loadUtilityScript("util_skim.js");
-    loadUtilityScript("util_fs.js");
-    loadUtilityScript("util_render.js");
+    const createOcrUtils = loadUtilityFactory("util_ocr.js", "createOcrUtils");
+    const createDateUtils = loadUtilityFactory("util_date.js", "createDateUtils");
+    const createSkimUtils = loadUtilityFactory("util_skim.js", "createSkimUtils");
+    const createFsUtils = loadUtilityFactory("util_fs.js", "createFsUtils");
+    const createRenderUtils = loadUtilityFactory("util_render.js", "createRenderUtils");
 
     const ocrUtils = createOcrUtils();
     const dateUtils = createDateUtils({

@@ -24,10 +24,19 @@ function skimRun(argv) {
             throw new Error(e.message);
         }
     };
+    const resolveScriptDir = () => {
+        const args = $.NSProcessInfo.processInfo.arguments;
+        const argCount = ObjC.unwrap(args.count);
+        for (let i = argCount - 1; i >= 0; i -= 1) {
+            const candidate = ObjC.unwrap(args.objectAtIndex(i));
+            if (typeof candidate === "string" && /\.js$/i.test(candidate)) {
+                return ObjC.unwrap($(candidate).stringByDeletingLastPathComponent);
+            }
+        }
+        throw new Error("Could not resolve current script path from process arguments.");
+    };
 
-    const args = $.NSProcessInfo.processInfo.arguments;
-    const scriptPath = ObjC.unwrap(args.objectAtIndex(3));
-    const scriptDir = ObjC.unwrap($(scriptPath).stringByDeletingLastPathComponent);
+    const scriptDir = resolveScriptDir();
 
     const loaderPath = `${scriptDir}/util_loader.js`;
     const loaderSource = runShell(`cat ${shellQuote(loaderPath)}`);
