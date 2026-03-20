@@ -45,6 +45,7 @@ function skimRun(argv) {
 
     const {
         ocrUtils,
+        ocrFixUtils,
         dateUtils,
         skimUtils,
         fsUtils,
@@ -55,6 +56,7 @@ function skimRun(argv) {
     const fixOcrHeadingNoise = ocrUtils.fixOcrHeadingNoise;
     const quickOcrCorrectHeader = ocrUtils.quickOcrCorrectHeader;
     const cleanQuoteText = ocrUtils.cleanQuoteText;
+    const ocrFix = ocrFixUtils.ocrFix;
     const buildLevel1PromptDefault = dateUtils.buildLevel1PromptDefault;
     const extractSkimData = skimUtils.extractSkimData;
     const createSkimAnnotation = skimUtils.createSkimAnnotation;
@@ -112,7 +114,7 @@ function skimRun(argv) {
         const skimData = extractSkimData();
         const pdfPath = skimData.pdfPath;
         const pageNum = skimData.pageNum;
-        const rawText = skimData.rawText || "";
+        const rawText = ocrFix(skimData.rawText || "");
 
         if (!pdfPath || !Number.isFinite(pageNum)) {
             notify("Could not read PDF path or page from Skim.");

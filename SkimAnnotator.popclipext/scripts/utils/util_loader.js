@@ -14,12 +14,14 @@ function loadSkimUtilityBundle(deps) {
     };
 
     const createOcrUtils = loadUtilityFactory("util_ocr.js", "createOcrUtils");
+    const createOcrFixUtils = loadUtilityFactory("util_ocr_fix.js", "createOcrFixUtils");
     const createDateUtils = loadUtilityFactory("util_date.js", "createDateUtils");
     const createSkimUtils = loadUtilityFactory("util_skim.js", "createSkimUtils");
     const createFsUtils = loadUtilityFactory("util_fs.js", "createFsUtils");
     const createRenderUtils = loadUtilityFactory("util_render.js", "createRenderUtils");
 
     const ocrUtils = createOcrUtils();
+    const ocrFixUtils = createOcrFixUtils();
     const dateUtils = createDateUtils({
         cleanInlineText: ocrUtils.cleanInlineText,
         quickOcrCorrectHeader: ocrUtils.quickOcrCorrectHeader
@@ -37,6 +39,7 @@ function loadSkimUtilityBundle(deps) {
 
     return {
         ocrUtils,
+        ocrFixUtils,
         dateUtils,
         skimUtils,
         fsUtils,
