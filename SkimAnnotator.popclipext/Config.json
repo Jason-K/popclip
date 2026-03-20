@@ -4,10 +4,10 @@
     "icon": "symbol:book",
     "actions": [
         {
-            "title": " H1 ",
-            "icon": "square filled H1",
+            "title": " Lvl 1 PDF ",
+            "icon": "symbol:doc.text",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js doc_header",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_l1.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -16,7 +16,7 @@
             "title": " H2 ",
             "icon": "square filled H2",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js h2",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_h2.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -25,7 +25,7 @@
             "title": " H3 ",
             "icon": "square filled H3",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js h3",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_h3.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -34,7 +34,7 @@
             "title": " H4 ",
             "icon": "square filled H4",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js h4",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_h4.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -43,7 +43,7 @@
             "title": " H5 ",
             "icon": "square filled H5",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js h5",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_h5.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -52,7 +52,7 @@
             "title": " H6 ",
             "icon": "square filled H6",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js h6",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_h6.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -61,7 +61,7 @@
             "title": " > Quote ",
             "icon": "square filled >",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js blockquote",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_blockquote.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -70,7 +70,7 @@
             "title": " \"Quote\" ",
             "icon": "square filled \"",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js inline_quote",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_inline_quote.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]
@@ -79,7 +79,7 @@
             "title": " Bullet ",
             "icon": "square filled •",
             "interpreter": "/bin/bash",
-            "shell script": "osascript -l JavaScript skim_logic.js highlight",
+            "shell script": "osascript -l JavaScript scripts/actions/skim_highlight.js",
             "requiredApps": [
                 "net.sourceforge.skim-app.skim"
             ]

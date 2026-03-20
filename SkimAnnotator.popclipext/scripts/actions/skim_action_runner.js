@@ -1,7 +1,7 @@
-// Skim Logic entrypoint - loads shared core and forwards mode arguments.
+// Skim action runner - executes shared core for a fixed mode.
 ObjC.import("Foundation");
 
-function loadSkimCoreAndRun(modeArgs) {
+function runMode(mode) {
     const app = Application.currentApplication();
     app.includeStandardAdditions = true;
 
@@ -10,7 +10,7 @@ function loadSkimCoreAndRun(modeArgs) {
     const args = $.NSProcessInfo.processInfo.arguments;
     const scriptPath = ObjC.unwrap(args.objectAtIndex(3));
     const scriptDir = ObjC.unwrap($(scriptPath).stringByDeletingLastPathComponent);
-    const corePath = `${scriptDir}/scripts/core/skim_core.js`;
+    const corePath = `${scriptDir}/../core/skim_core.js`;
     const coreSource = app.doShellScript(`cat ${shellQuote(corePath)}`);
 
     eval(coreSource);
@@ -19,9 +19,5 @@ function loadSkimCoreAndRun(modeArgs) {
         throw new Error("skim_core.js did not provide skimRun().");
     }
 
-    return skimRun(modeArgs || []);
-}
-
-function run(argv) {
-    return loadSkimCoreAndRun(argv || []);
+    return skimRun([mode]);
 }
