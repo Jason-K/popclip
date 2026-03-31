@@ -53,20 +53,21 @@ function createRenderUtils(deps) {
         return `{\\rtf1\\ansi\\ansicpg1252\n{\\fonttbl\\f0\\fswiss\\fcharset0 Helvetica;}\n\\f0\\fs24 ${content}}`;
     };
 
-    const metadataValue = (value) => {
-        const normalized = String(value || "").replace(/\s+/g, " ").trim();
-        if (!normalized) return '""';
-        return `"${normalized.replace(/"/g, "'")}"`;
-    };
+    const capitalizeHeading = (value) => {
+      const text = String(value || "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!text) return "";
 
-    const buildMetadataComment = ({ source, page, subdoc, modeValue }) => {
-        const pieces = [
-            `source:${metadataValue(source)}`,
-            `page:${Number.isFinite(page) ? page : 0}`,
-            `subdoc:${metadataValue(subdoc || "")}`,
-            `mode:${metadataValue(modeValue)}`
-        ];
-        return `<!-- ${pieces.join(" ")} -->`;
+      return text.replace(
+        /\b([A-Za-z])([A-Za-z']*)\b/g,
+        (match, first, rest) => {
+          if (/^[A-Z0-9&/.-]+$/.test(match) && match.length <= 5) {
+            return match;
+          }
+          return `${first.toUpperCase()}${rest.toLowerCase()}`;
+        },
+      );
     };
 
     const detectSubdocumentFromText = (text) => {
@@ -85,9 +86,11 @@ function createRenderUtils(deps) {
         const headingText = fixOcrHeadingNoise(cleanedInline);
 
         if (modeValue === "doc_header") {
-            const docHeading = subdoc || headingText || pdfName;
+            const docHeading = capitalizeHeading(
+              subdoc || headingText || pdfName,
+            );
             visible = `# ${docHeading}\n[${pdfName}](${fileUrl})`;
-            return { visible, includeMetadata: false };
+            return { visible };
         }
 
         if (modeValue === "h2" || modeValue === "h3" || modeValue === "h4" || modeValue === "h5" || modeValue === "h6") {
@@ -96,8 +99,8 @@ function createRenderUtils(deps) {
             const chosenHeading = modeValue === "h2" && String(subdoc || "").trim()
                 ? quickOcrCorrectHeader(cleanInlineText(subdoc))
                 : quickOcrCorrectHeader(headingText);
-            visible = `${hashes} ${chosenHeading} ${pageRef}`;
-            return { visible, includeMetadata: true };
+            visible = `${hashes} ${capitalizeHeading(chosenHeading)} ${pageRef}`;
+            return { visible };
         }
 
         if (modeValue === "blockquote") {
@@ -106,16 +109,16 @@ function createRenderUtils(deps) {
                 .map((line) => `> ${line}`)
                 .join("\n");
             visible = `${quotedLines}\n> ${pageRef}`;
-            return { visible, includeMetadata: true };
+            return { visible };
         }
 
         if (modeValue === "inline_quote") {
             visible = `\"${headingText}\" ${pageRef}`;
-            return { visible, includeMetadata: true };
+            return { visible };
         }
 
         visible = `* ${headingText} ${pageRef}`;
-        return { visible, includeMetadata: true };
+        return { visible };
     };
 
     const normalizeEntryBlock = (value) => String(value || "")
@@ -124,12 +127,11 @@ function createRenderUtils(deps) {
         .trim();
 
     return {
-        escapeMarkdownLinkText,
-        ensurePrimaryHeading,
-        generateRTF,
-        buildMetadataComment,
-        detectSubdocumentFromText,
-        renderEntry,
-        normalizeEntryBlock
+      escapeMarkdownLinkText,
+      ensurePrimaryHeading,
+      generateRTF,
+      detectSubdocumentFromText,
+      renderEntry,
+      normalizeEntryBlock,
     };
 }

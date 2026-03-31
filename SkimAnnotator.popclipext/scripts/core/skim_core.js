@@ -73,7 +73,6 @@ function skimRun(argv) {
     const escapeMarkdownLinkText = renderUtils.escapeMarkdownLinkText;
     const ensurePrimaryHeading = renderUtils.ensurePrimaryHeading;
     const generateRTF = renderUtils.generateRTF;
-    const buildMetadataComment = renderUtils.buildMetadataComment;
     const detectSubdocumentFromText = renderUtils.detectSubdocumentFromText;
     const renderEntry = renderUtils.renderEntry;
     const normalizeEntryBlock = renderUtils.normalizeEntryBlock;
@@ -159,7 +158,18 @@ function skimRun(argv) {
                 return;
             }
 
-            const escapedHeadingText = escapeMarkdownLinkText(headingText);
+            const normalizedHeadingText = headingText
+              .replace(/\s+/g, " ")
+              .trim()
+              .replace(/\b([A-Za-z])([A-Za-z']*)\b/g, (match, first, rest) => {
+                if (/^[A-Z0-9&/.-]+$/.test(match) && match.length <= 5) {
+                  return match;
+                }
+                return `${first.toUpperCase()}${rest.toLowerCase()}`;
+              });
+            const escapedHeadingText = escapeMarkdownLinkText(
+              normalizedHeadingText,
+            );
             const level1Line = `# [${escapedHeadingText}](${fileUrl})`;
             const mdContent = readTextFile(mdFile);
             if (!mdContent.includes(level1Line)) {
@@ -203,20 +213,8 @@ function skimRun(argv) {
             subdoc
         });
 
-        const metadata = buildMetadataComment({
-            source: pdfName,
-            page: pageNum,
-            subdoc,
-            modeValue: mode
-        });
-
-        const entry = rendered.includeMetadata
-            ? `\n${rendered.visible}\n${metadata}`
-            : `\n${rendered.visible}`;
-
-        const candidateBlock = normalizeEntryBlock(rendered.includeMetadata
-            ? `${rendered.visible}\n${metadata}`
-            : rendered.visible);
+        const entry = `\n${rendered.visible}`;
+        const candidateBlock = normalizeEntryBlock(rendered.visible);
 
         const lastEntryBlock = getLastEntryBlock(mdFile);
         if (candidateBlock && candidateBlock === normalizeEntryBlock(lastEntryBlock)) {
