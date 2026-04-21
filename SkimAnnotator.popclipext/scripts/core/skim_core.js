@@ -71,6 +71,7 @@ function skimRun(argv) {
     const isOpenInVSCode = fsUtils.isOpenInVSCode;
 
     const escapeMarkdownLinkText = renderUtils.escapeMarkdownLinkText;
+    const capitalizeHeading = renderUtils.capitalizeHeading;
     const ensurePrimaryHeading = renderUtils.ensurePrimaryHeading;
     const generateRTF = renderUtils.generateRTF;
     const detectSubdocumentFromText = renderUtils.detectSubdocumentFromText;
@@ -158,15 +159,8 @@ function skimRun(argv) {
                 return;
             }
 
-            const normalizedHeadingText = headingText
-              .replace(/\s+/g, " ")
-              .trim()
-              .replace(/\b([A-Za-z])([A-Za-z']*)\b/g, (match, first, rest) => {
-                if (/^[A-Z0-9&/.-]+$/.test(match) && match.length <= 5) {
-                  return match;
-                }
-                return `${first.toUpperCase()}${rest.toLowerCase()}`;
-              });
+                        const normalizedHeadingText =
+                          capitalizeHeading(headingText);
             const escapedHeadingText = escapeMarkdownLinkText(
               normalizedHeadingText,
             );
@@ -213,7 +207,8 @@ function skimRun(argv) {
             subdoc
         });
 
-        const entry = `\n${rendered.visible}`;
+        const entry =
+          mode === "highlight" ? rendered.visible : `\n${rendered.visible}`;
         const candidateBlock = normalizeEntryBlock(rendered.visible);
 
         const lastEntryBlock = getLastEntryBlock(mdFile);

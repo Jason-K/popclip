@@ -54,20 +54,10 @@ function createRenderUtils(deps) {
     };
 
     const capitalizeHeading = (value) => {
-      const text = String(value || "")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (!text) return "";
-
-      return text.replace(
-        /\b([A-Za-z])([A-Za-z']*)\b/g,
-        (match, first, rest) => {
-          if (/^[A-Z0-9&/.-]+$/.test(match) && match.length <= 5) {
-            return match;
-          }
-          return `${first.toUpperCase()}${rest.toLowerCase()}`;
-        },
-      );
+            return String(value || "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .toUpperCase();
     };
 
     const detectSubdocumentFromText = (text) => {
@@ -128,6 +118,7 @@ function createRenderUtils(deps) {
 
     return {
       escapeMarkdownLinkText,
+      capitalizeHeading,
       ensurePrimaryHeading,
       generateRTF,
       detectSubdocumentFromText,

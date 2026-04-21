@@ -68,6 +68,7 @@ function skimRun(argv) {
     const isOpenInVSCode = fsUtils.isOpenInVSCode;
 
     const escapeMarkdownLinkText = renderUtils.escapeMarkdownLinkText;
+    const capitalizeHeading = renderUtils.capitalizeHeading;
     const ensurePrimaryHeading = renderUtils.ensurePrimaryHeading;
     const generateRTF = renderUtils.generateRTF;
     const buildMetadataComment = renderUtils.buildMetadataComment;
@@ -156,7 +157,11 @@ function skimRun(argv) {
                 return;
             }
 
-            const escapedHeadingText = escapeMarkdownLinkText(headingText);
+                        const normalizedHeadingText =
+                          capitalizeHeading(headingText);
+                        const escapedHeadingText = escapeMarkdownLinkText(
+                          normalizedHeadingText,
+                        );
             const level1Line = `# [${escapedHeadingText}](${fileUrl})`;
             const mdContent = readTextFile(mdFile);
             if (!mdContent.includes(level1Line)) {
@@ -207,9 +212,10 @@ function skimRun(argv) {
             modeValue: mode
         });
 
+        const entryPrefix = mode === "highlight" ? "" : "\n";
         const entry = rendered.includeMetadata
-            ? `\n${rendered.visible}\n${metadata}`
-            : `\n${rendered.visible}`;
+          ? `${entryPrefix}${rendered.visible}\n${metadata}`
+          : `${entryPrefix}${rendered.visible}`;
 
         const candidateBlock = normalizeEntryBlock(rendered.includeMetadata
             ? `${rendered.visible}\n${metadata}`
