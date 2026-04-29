@@ -2,6 +2,8 @@
 
 SkimAnnotator is a PopClip extension for capturing structured markdown notes from the active Skim PDF.
 
+In PopClip settings, you can optionally set `Output directory` to an absolute path or `~/...` path for generated markdown files. Leave it blank to keep saving beside the active PDF.
+
 ## Documentation
 
 - Script architecture and maintenance notes: [scripts/README.md](scripts/README.md)

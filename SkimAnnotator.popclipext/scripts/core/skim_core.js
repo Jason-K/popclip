@@ -24,6 +24,15 @@ function skimRun(argv) {
             throw new Error(e.message);
         }
     };
+    const getEnvironmentValue = (name) => {
+      const envValue =
+        $.NSProcessInfo.processInfo.environment.objectForKey(name);
+      if (!envValue) {
+        return "";
+      }
+
+      return String(ObjC.unwrap(envValue) || "");
+    };
     const resolveScriptDir = () => {
         const args = $.NSProcessInfo.processInfo.arguments;
         const argCount = ObjC.unwrap(args.count);
@@ -104,6 +113,52 @@ function skimRun(argv) {
         return (result.textReturned || "").trim();
     };
 
+    const expandUserPath = (value) => {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) {
+        return "";
+      }
+
+      const homeDir = getEnvironmentValue("HOME");
+      if (trimmed === "~") {
+        return homeDir || trimmed;
+      }
+
+      if (trimmed.startsWith("~/")) {
+        return homeDir ? `${homeDir}/${trimmed.slice(2)}` : trimmed;
+      }
+
+      return trimmed;
+    };
+
+    const standardizePath = (value) =>
+      String(ObjC.unwrap($(value).stringByStandardizingPath));
+
+    const resolveMarkdownPath = (pdfPath) => {
+      const configuredOutputDir = expandUserPath(
+        getEnvironmentValue("POPCLIP_OPTION_OUTPUTDIR"),
+      );
+      if (!configuredOutputDir) {
+        return pdfPath.replace(/\.pdf$/i, ".md");
+      }
+
+      const pdfName = pdfPath.split("/").pop() || "source.pdf";
+      const markdownName = /\.pdf$/i.test(pdfName)
+        ? pdfName.replace(/\.pdf$/i, ".md")
+        : `${pdfName}.md`;
+      const outputDir = standardizePath(configuredOutputDir).replace(
+        /\/+$/,
+        "",
+      );
+
+      if (!outputDir) {
+        return pdfPath.replace(/\.pdf$/i, ".md");
+      }
+
+      runShell(`mkdir -p ${shellQuote(outputDir)}`);
+      return `${outputDir}/${markdownName}`;
+    };
+
     try {
         const skim = Application("Skim");
         if (!skim.running()) {
@@ -114,7 +169,9 @@ function skimRun(argv) {
         const skimData = extractSkimData();
         const pdfPath = skimData.pdfPath;
         const pageNum = skimData.pageNum;
-        const rawText = ocrFix(skimData.rawText || "");
+        const popclipText = getEnvironmentValue("POPCLIP_TEXT");
+        const selectedText = popclipText || skimData.rawText || "";
+        const rawText = ocrFix(selectedText);
 
         if (!pdfPath || !Number.isFinite(pageNum)) {
             notify("Could not read PDF path or page from Skim.");
@@ -126,7 +183,7 @@ function skimRun(argv) {
             return;
         }
 
-        const mdFile = pdfPath.replace(/\.pdf$/i, ".md");
+        const mdFile = resolveMarkdownPath(pdfPath);
         const mdBaseName = mdFile.split("/").pop() || "";
         const pdfName = pdfPath.split("/").pop() || "source.pdf";
         const fileUrl = `file://${encodeURI(pdfPath)}`;
