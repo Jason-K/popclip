@@ -8,6 +8,24 @@
       "type": "string",
       "label": "Output directory",
       "description": "Absolute path or ~/path for generated markdown files. Leave blank to save next to the active PDF."
+    },
+    {
+      "identifier": "editor",
+      "type": "multiple",
+      "label": "Open with",
+      "description": "Application used to open the markdown file after capturing.",
+      "defaultValue": "Visual Studio Code",
+      "values": [
+        "Visual Studio Code",
+        "Visual Studio Code - Insiders",
+        "BBEdit",
+        "CotEditor",
+        "MacDown",
+        "Nova",
+        "Sublime Text",
+        "TextEdit",
+        "Typora"
+      ]
     }
   ],
   "actions": [

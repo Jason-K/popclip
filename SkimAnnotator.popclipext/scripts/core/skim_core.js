@@ -77,7 +77,7 @@ function skimRun(argv) {
     const loadState = fsUtils.loadState;
     const saveState = fsUtils.saveState;
     const getLastEntryBlock = fsUtils.getLastEntryBlock;
-    const isOpenInVSCode = fsUtils.isOpenInVSCode;
+    const isFileOpenInEditor = fsUtils.isFileOpenInEditor;
 
     const escapeMarkdownLinkText = renderUtils.escapeMarkdownLinkText;
     const capitalizeHeading = renderUtils.capitalizeHeading;
@@ -160,6 +160,9 @@ function skimRun(argv) {
     };
 
     try {
+        const editorApp =
+          getEnvironmentValue("POPCLIP_OPTION_EDITOR") || "Visual Studio Code";
+
         const skim = Application("Skim");
         if (!skim.running()) {
             notify("Skim is not running.");
@@ -205,13 +208,17 @@ function skimRun(argv) {
             try {
                 headingText = promptLevel1Heading(defaultHeading);
             } catch (e) {
-                runShell(`open -a "Visual Studio Code" ${shellQuote(mdFile)}`);
+                runShell(
+                  `open -a ${shellQuote(editorApp)} ${shellQuote(mdFile)}`,
+                );
                 notify(`Prepared ${mdBaseName}.`);
                 return;
             }
 
             if (!headingText) {
-                runShell(`open -a "Visual Studio Code" ${shellQuote(mdFile)}`);
+                runShell(
+                  `open -a ${shellQuote(editorApp)} ${shellQuote(mdFile)}`,
+                );
                 notify("No heading entered.");
                 return;
             }
@@ -227,7 +234,7 @@ function skimRun(argv) {
                 appendTextFile(mdFile, `\n${level1Line}\n`);
             }
 
-            runShell(`open -a "Visual Studio Code" ${shellQuote(mdFile)}`);
+            runShell(`open -a ${shellQuote(editorApp)} ${shellQuote(mdFile)}`);
 
             if (rawText.trim()) {
                 createSkimAnnotation(mode);
@@ -283,8 +290,8 @@ function skimRun(argv) {
         createSkimAnnotation(mode);
 
         const mdExists = runShell(`[ -f ${shellQuote(mdFile)} ] && echo 1 || echo 0`).trim() === "1";
-        if (!mdExists || !isOpenInVSCode(mdFile, mdBaseName)) {
-            runShell(`open -a "Visual Studio Code" ${shellQuote(mdFile)}`);
+        if (!mdExists || !isFileOpenInEditor(mdFile, mdBaseName, editorApp)) {
+          runShell(`open -a ${shellQuote(editorApp)} ${shellQuote(mdFile)}`);
         }
 
         notify(`Captured page ${pageNum} to ${mdBaseName}.`);

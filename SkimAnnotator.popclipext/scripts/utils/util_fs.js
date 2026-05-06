@@ -44,27 +44,44 @@ function createFsUtils(deps) {
         }
     };
 
-    const isOpenInVSCode = (mdFile, mdBaseName) => {
-        const directScript = `tell application "Visual Studio Code"
-            try
-                repeat with d in documents
-                    try
-                        if (path of d as text) is "${mdFile}" then return "1"
-                    end try
-                end repeat
-                return "0"
-            on error
-                return "ERR"
-            end try
-        end tell`;
+    const APP_PROCESS_NAMES = {
+      "Visual Studio Code": "Code",
+      "Visual Studio Code - Insiders": "Code - Insiders",
+    };
 
-        const directResult = runShell(`osascript -e ${shellQuote(directScript)}`).trim();
+    const isFileOpenInEditor = (mdFile, mdBaseName, editorApp) => {
+      const appName = editorApp || "Visual Studio Code";
+      const processName = APP_PROCESS_NAMES[appName] || appName;
+
+      // For VS Code family, try the document API first (most reliable)
+      if (
+        appName === "Visual Studio Code" ||
+        appName === "Visual Studio Code - Insiders"
+      ) {
+        const directScript = `tell application "${appName}"
+                try
+                    repeat with d in documents
+                        try
+                            if (path of d as text) is "${mdFile}" then return "1"
+                        end try
+                    end repeat
+                    return "0"
+                on error
+                    return "ERR"
+                end try
+            end tell`;
+
+        const directResult = runShell(
+          `osascript -e ${shellQuote(directScript)}`,
+        ).trim();
         if (directResult === "1") return true;
         if (directResult === "0") return false;
+      }
 
-        const fallbackScript = `tell application "System Events"
-            if not (exists process "Code") then return "0"
-            tell process "Code"
+      // Fallback: check window title via System Events
+      const fallbackScript = `tell application "System Events"
+            if not (exists process "${processName}") then return "0"
+            tell process "${processName}"
                 repeat with w in windows
                     try
                         if (name of w) contains "${mdBaseName}" then return "1"
@@ -74,18 +91,20 @@ function createFsUtils(deps) {
             return "0"
         end tell`;
 
-        const fallbackResult = runShell(`osascript -e ${shellQuote(fallbackScript)}`).trim();
-        return fallbackResult === "1";
+      const fallbackResult = runShell(
+        `osascript -e ${shellQuote(fallbackScript)}`,
+      ).trim();
+      return fallbackResult === "1";
     };
 
     return {
-        fileExists,
-        readTextFile,
-        writeTextFile,
-        appendTextFile,
-        loadState,
-        saveState,
-        getLastEntryBlock,
-        isOpenInVSCode
+      fileExists,
+      readTextFile,
+      writeTextFile,
+      appendTextFile,
+      loadState,
+      saveState,
+      getLastEntryBlock,
+      isFileOpenInEditor,
     };
 }
