@@ -1,0 +1,57 @@
+# Exclude all .git directories recursively
+**/.git
+
+# Exclude all .DS_Store files recursively
+**/.DS_Store
+
+# Exclude all /.deprecated directories recursively
+**/.deprecated/
+
+# Exclude all .bak files and all /ARCHIVE directories recursively
+**/*.bak
+**/ARCHIVE/
+
+# Exclude AHK folder and all its contents
+AHK/
+Hammerspoon/Official Spoons/
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
+
+# Python / test / IDE caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.spyproject/
+
+# Editor-specific files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node.js dependencies (if applicable)
+node_modules/
+
+# Knowledge graph files
+knowledgeGraphMemory.json
+
+# Exclude Workspace files and folders
+Workspaces/
+*.code-workspace
+
+# venv folders
+venv/
+*/venv/
+*/.venv/
+.venv/
