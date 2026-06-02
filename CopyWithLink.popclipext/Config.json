@@ -1,0 +1,50 @@
+{
+  "popclip version": 4151,
+  "identifier": "com.jasonwatmore.popclip.copy-with-link",
+  "name": "Copy with Link",
+  "icon": "symbol:link",
+  "requirements": ["text"],
+  "options": [
+    {
+      "identifier": "vscode",
+      "type": "boolean",
+      "label": "Active in VS Code",
+      "defaultValue": true
+    },
+    {
+      "identifier": "sublime",
+      "type": "boolean",
+      "label": "Active in Sublime Text",
+      "defaultValue": true
+    },
+    {
+      "identifier": "skim",
+      "type": "boolean",
+      "label": "Active in Skim",
+      "defaultValue": true
+    },
+    {
+      "identifier": "acrobat",
+      "type": "boolean",
+      "label": "Active in Adobe Acrobat",
+      "defaultValue": true
+    }
+  ],
+  "actions": [
+    {
+      "title": "Copy with Link",
+      "after": "copy-result",
+      "shellScriptFile": "script.sh",
+      "interpreter": "zsh",
+      "requiredApps": [
+        "com.microsoft.VSCode",
+        "com.sublimetext.4",
+        "com.sublimetext.3",
+        "net.sourceforge.skim-app.skim",
+        "com.adobe.acrobat.pro",
+        "com.adobe.acrobat.pro.dc",
+        "com.adobe.acrobat"
+      ]
+    }
+  ]
+}
