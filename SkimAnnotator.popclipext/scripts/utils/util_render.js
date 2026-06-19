@@ -107,7 +107,7 @@ function createRenderUtils(deps) {
             return { visible };
         }
 
-        visible = `* ${headingText} ${pageRef}`;
+        visible = `- ${headingText} ${pageRef}`;
         return { visible };
     };
 
