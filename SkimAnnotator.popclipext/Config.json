@@ -1,5 +1,5 @@
 {
-  "identifier": "com.jason.popclip.extension.skim-bookmarker",
+  "identifier": "uk.knoxhaus.popclip.extension.skim-bookmarker",
   "name": "Skim Bookmarker",
   "icon": "symbol:book",
   "options": [
