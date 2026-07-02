@@ -194,7 +194,8 @@ function skimRun(argv) {
       const statePath = "/tmp/skim_bookmarker_state.json";
 
       const cleanedInline = cleanInlineText(rawText);
-      const cleanedQuote = cleanQuoteText(rawText);
+      //   const cleanedQuote = cleanQuoteText(rawText);
+      const cleanedQuote = cleanQuoteText(ocrUtils.removeLineNumbers(rawText));
 
       const state = loadState(statePath);
       const priorSubdoc = state[pdfPath] || "";
@@ -282,7 +283,13 @@ function skimRun(argv) {
 
       runShell(`printf '%s\n' ${shellQuote(entry)} >> ${shellQuote(mdFile)}`);
 
-      const clipboardText = rendered.visible.replace(/\n+/g, " ").trim();
+      //   const clipboardText = rendered.visible.replace(/\n+/g, " ").trim();
+      const clipboardText = cleanQuoteText(
+        ocrUtils.removeLineNumbers(
+          rendered.visible.replace(/\n+/g, " ").trim(),
+        ),
+      );
+
       const rtf = generateRTF(clipboardText, pageNum, fileUrl);
       runShell(`printf '%s' ${shellQuote(rtf)} | pbcopy -Prefer rtf`);
 
