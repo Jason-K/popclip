@@ -26,7 +26,7 @@ function createSkimUtils(deps) {
     };
 
     const createSkimAnnotation = (modeValue) => {
-        const noteType = (modeValue === "highlight" || modeValue === "blockquote" || modeValue === "inline_quote")
+        const noteType = (modeValue === "highlight" || modeValue === "blockquote" || modeValue === "inline_quote" || modeValue === "append")
             ? "highlight note"
             : "underline note";
 

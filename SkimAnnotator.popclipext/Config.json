@@ -91,6 +91,13 @@
       "interpreter": "/bin/bash",
       "shell script": "osascript -l JavaScript scripts/actions/skim_highlight.js",
       "requiredApps": ["net.sourceforge.skim-app.skim"]
+    },
+    {
+      "title": " Append ",
+      "icon": "square filled ↳",
+      "interpreter": "/bin/bash",
+      "shell script": "osascript -l JavaScript scripts/actions/skim_append.js",
+      "requiredApps": ["net.sourceforge.skim-app.skim"]
     }
   ]
 }

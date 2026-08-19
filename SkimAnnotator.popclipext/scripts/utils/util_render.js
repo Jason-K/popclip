@@ -116,6 +116,134 @@ function createRenderUtils(deps) {
         .replace(/\r/g, "\n")
         .trim();
 
+    const extractCitation = (line) => {
+        const text = String(line || "").trim();
+        const bracketMatch = text.match(/\s*\[(?:pp?\.?\s*)(\d+)(?:\s*[\u2013\u2014-]\s*(\d+))?\]\s*$/i);
+        if (bracketMatch) {
+            const startPage = parseInt(bracketMatch[1], 10);
+            const endPage = bracketMatch[2] ? parseInt(bracketMatch[2], 10) : startPage;
+            const textWithoutCitation = text.slice(0, bracketMatch.index).trim();
+            return { textWithoutCitation, startPage, endPage, rawCitation: bracketMatch[0].trim(), isParen: false };
+        }
+
+        const parenMatch = text.match(/\s*\((?:pp?\.?\s*)(\d+)(?:\s*[\u2013\u2014-]\s*(\d+))?\)\s*$/i);
+        if (parenMatch) {
+            const startPage = parseInt(parenMatch[1], 10);
+            const endPage = parenMatch[2] ? parseInt(parenMatch[2], 10) : startPage;
+            const textWithoutCitation = text.slice(0, parenMatch.index).trim();
+            return { textWithoutCitation, startPage, endPage, rawCitation: parenMatch[0].trim(), isParen: true };
+        }
+
+        return { textWithoutCitation: text, startPage: null, endPage: null, rawCitation: "", isParen: false };
+    };
+
+    const mergePageCitations = (startPage, endPage, newPageNum) => {
+        const p = parseInt(newPageNum, 10);
+        if (startPage !== null && !isNaN(startPage)) {
+            const s = parseInt(startPage, 10);
+            const e = (endPage !== null && !isNaN(endPage)) ? parseInt(endPage, 10) : s;
+            const minPage = Math.min(s, e, p);
+            const maxPage = Math.max(s, e, p);
+            const pageLabel = minPage === maxPage ? String(minPage) : `${minPage}-${maxPage}`;
+            const citation = `[p.${pageLabel}]`;
+            const pageChanged = !(s === p && e === p);
+            return { minPage, maxPage, pageLabel, citation, pageChanged };
+        }
+
+        const pageLabel = String(p);
+        return { minPage: p, maxPage: p, pageLabel, citation: `[p.${pageLabel}]`, pageChanged: false };
+    };
+
+    const mergeBulletText = (baseText, additionText, pageChanged) => {
+        let base = String(baseText || "").trim();
+        let addition = String(additionText || "").trim();
+
+        if (!base) return addition;
+        if (!addition) return base;
+
+        // Check if base is wrapped in quotes: e.g. - "some text" or "some text"
+        const quotedBulletMatch = base.match(/^(\s*[-*+]\s+)"([\s\S]*)"$/);
+        const quotedNoPrefixMatch = !quotedBulletMatch ? base.match(/^"([\s\S]*)"$/) : null;
+
+        if (quotedBulletMatch || quotedNoPrefixMatch) {
+            const prefix = quotedBulletMatch ? quotedBulletMatch[1] : "";
+            let innerBase = quotedBulletMatch ? quotedBulletMatch[2] : quotedNoPrefixMatch[1];
+            let innerAddition = addition;
+            if (innerAddition.startsWith('"')) innerAddition = innerAddition.slice(1).trim();
+            if (innerAddition.endsWith('"')) innerAddition = innerAddition.slice(0, -1).trim();
+
+            let joined = "";
+            if (!pageChanged) {
+                innerBase = innerBase.replace(/\.+$/, "").trim();
+                joined = `${innerBase} ... ${innerAddition}`;
+            } else {
+                if (innerBase.endsWith("-") && /[a-zA-Z]-$/.test(innerBase) && /^[a-zA-Z]/.test(innerAddition)) {
+                    joined = innerBase.slice(0, -1) + innerAddition;
+                } else if (/^[.,;:!?]/.test(innerAddition)) {
+                    joined = innerBase + innerAddition;
+                } else {
+                    joined = `${innerBase} ${innerAddition}`;
+                }
+            }
+
+            return `${prefix}"${joined}"`;
+        }
+
+        // Unclosed opening quote: e.g. - "Some text
+        const unclosedBulletMatch = base.match(/^(\s*[-*+]\s+)"([\s\S]*)$/);
+        if (unclosedBulletMatch) {
+            const prefix = unclosedBulletMatch[1];
+            let innerBase = unclosedBulletMatch[2];
+            let innerAddition = addition;
+            if (innerAddition.startsWith('"')) innerAddition = innerAddition.slice(1).trim();
+            if (innerAddition.endsWith('"')) innerAddition = innerAddition.slice(0, -1).trim();
+
+            let joined = "";
+            if (!pageChanged) {
+                innerBase = innerBase.replace(/\.+$/, "").trim();
+                joined = `${innerBase} ... ${innerAddition}`;
+            } else {
+                if (innerBase.endsWith("-") && /[a-zA-Z]-$/.test(innerBase) && /^[a-zA-Z]/.test(innerAddition)) {
+                    joined = innerBase.slice(0, -1) + innerAddition;
+                } else if (/^[.,;:!?]/.test(innerAddition)) {
+                    joined = innerBase + innerAddition;
+                } else {
+                    joined = `${innerBase} ${innerAddition}`;
+                }
+            }
+
+            return `${prefix}"${joined}"`;
+        }
+
+        // Standard bullet or unquoted text
+        if (!pageChanged) {
+            const cleanedBase = base.replace(/\.+$/, "").trim();
+            return `${cleanedBase} ... ${addition}`;
+        }
+
+        if (base.endsWith("-") && /[a-zA-Z]-$/.test(base) && /^[a-zA-Z]/.test(addition)) {
+            return base.slice(0, -1) + addition;
+        } else if (/^[.,;:!?]/.test(addition)) {
+            return base + addition;
+        }
+
+        return `${base} ${addition}`;
+    };
+
+    const updateBulletWithAppend = (existingBulletLine, newText, newPageNum) => {
+        const parsed = extractCitation(existingBulletLine);
+        const pageInfo = mergePageCitations(parsed.startPage, parsed.endPage, newPageNum);
+        const mergedText = mergeBulletText(parsed.textWithoutCitation, newText, pageInfo.pageChanged);
+        const updatedLine = `${mergedText} ${pageInfo.citation}`;
+        return {
+            updatedLine,
+            mergedPageLabel: pageInfo.pageLabel,
+            mergedCitation: pageInfo.citation,
+            fullMergedText: mergedText,
+            pageChanged: pageInfo.pageChanged
+        };
+    };
+
     return {
       escapeMarkdownLinkText,
       capitalizeHeading,
@@ -124,5 +252,9 @@ function createRenderUtils(deps) {
       detectSubdocumentFromText,
       renderEntry,
       normalizeEntryBlock,
+      extractCitation,
+      mergePageCitations,
+      mergeBulletText,
+      updateBulletWithAppend,
     };
 }

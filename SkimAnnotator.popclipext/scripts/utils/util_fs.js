@@ -44,6 +44,79 @@ function createFsUtils(deps) {
         }
     };
 
+    const appendOrUpdateLastBulletInMarkdown = (mdFile, newText, newPageNum, renderUtils) => {
+        if (!fileExists(mdFile)) {
+            const initialLine = `- ${newText} [p.${newPageNum}]`;
+            writeTextFile(mdFile, `${initialLine}\n`);
+            return {
+                updated: true,
+                created: true,
+                mergedPageLabel: String(newPageNum),
+                fullMergedText: `- ${newText}`,
+                plainMergedText: newText,
+                updatedLine: initialLine
+            };
+        }
+
+        const content = readTextFile(mdFile).replace(/^\uFEFF/, "");
+        const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+        // Find the index of the last bullet line (starting with -, *, or +)
+        let lastBulletIdx = -1;
+        for (let i = lines.length - 1; i >= 0; i -= 1) {
+            if (/^\s*[-*+]\s+/.test(lines[i])) {
+                lastBulletIdx = i;
+                break;
+            }
+        }
+
+        if (lastBulletIdx === -1) {
+            // No bullet found in existing content; append new bullet
+            const newBulletLine = `- ${newText} [p.${newPageNum}]`;
+            const normalizedContent = content.trim();
+            const nextContent = normalizedContent ? `${normalizedContent}\n${newBulletLine}\n` : `${newBulletLine}\n`;
+            writeTextFile(mdFile, nextContent);
+            return {
+                updated: true,
+                created: false,
+                mergedPageLabel: String(newPageNum),
+                fullMergedText: `- ${newText}`,
+                plainMergedText: newText,
+                updatedLine: newBulletLine
+            };
+        }
+
+        // If the bullet has indented continuation lines, find the last continuation line of this bullet
+        let targetLineIdx = lastBulletIdx;
+        for (let j = lastBulletIdx + 1; j < lines.length; j += 1) {
+            if (/^\s*[-*+]\s+/.test(lines[j]) || /^#/.test(lines[j]) || !lines[j].trim()) {
+                break;
+            }
+            if (/^\s{2,}\S/.test(lines[j]) || /^\t+\S/.test(lines[j])) {
+                targetLineIdx = j;
+            } else {
+                break;
+            }
+        }
+
+        const existingLine = lines[targetLineIdx];
+        const updateResult = renderUtils.updateBulletWithAppend(existingLine, newText, newPageNum);
+        lines[targetLineIdx] = updateResult.updatedLine;
+
+        const nextContent = lines.join("\n");
+        writeTextFile(mdFile, nextContent.endsWith("\n") ? nextContent : `${nextContent}\n`);
+
+        const plainMergedText = updateResult.fullMergedText.replace(/^\s*[-*+]\s+/, "");
+        return {
+            updated: true,
+            created: false,
+            mergedPageLabel: updateResult.mergedPageLabel,
+            fullMergedText: updateResult.fullMergedText,
+            plainMergedText,
+            updatedLine: updateResult.updatedLine
+        };
+    };
+
     const APP_PROCESS_NAMES = {
       "Visual Studio Code": "Code",
       "Visual Studio Code - Insiders": "Code - Insiders",
@@ -105,6 +178,7 @@ function createFsUtils(deps) {
       loadState,
       saveState,
       getLastEntryBlock,
+      appendOrUpdateLastBulletInMarkdown,
       isFileOpenInEditor,
     };
 }

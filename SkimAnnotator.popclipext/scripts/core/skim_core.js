@@ -240,6 +240,43 @@ function skimRun(argv) {
         return;
       }
 
+      if (mode === "append") {
+        const primaryHeadingLine = `# [${escapedPdfName}](${fileUrl})`;
+        ensurePrimaryHeading(mdFile, primaryHeadingLine, fileUrl);
+
+        const headingText = fixOcrHeadingNoise(cleanedInline);
+        const appendResult = fsUtils.appendOrUpdateLastBulletInMarkdown(
+          mdFile,
+          headingText,
+          pageNum,
+          renderUtils,
+        );
+
+        const clipboardText = cleanQuoteText(
+          ocrUtils.removeLineNumbers(
+            appendResult.plainMergedText.replace(/\n+/g, " ").trim(),
+          ),
+        );
+
+        const rtf = generateRTF(
+          clipboardText,
+          appendResult.mergedPageLabel,
+          fileUrl,
+        );
+        runShell(`printf '%s' ${shellQuote(rtf)} | pbcopy -Prefer rtf`);
+
+        createSkimAnnotation(mode);
+
+        const mdExists =
+          runShell(`[ -f ${shellQuote(mdFile)} ] && echo 1 || echo 0`).trim() ===
+          "1";
+        if (!mdExists || !isFileOpenInEditor(mdFile, mdBaseName, editorApp)) {
+          runShell(`open -a ${shellQuote(editorApp)} ${shellQuote(mdFile)}`);
+        }
+
+        return;
+      }
+
       let subdoc = priorSubdoc;
       if (mode === "h2") {
         const guessed = detectSubdocumentFromText(rawText);

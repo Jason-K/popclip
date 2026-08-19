@@ -35,6 +35,7 @@ Action scripts currently include:
 - `skim_blockquote.js`
 - `skim_inline_quote.js`
 - `skim_highlight.js`
+- `skim_append.js`
 
 These are referenced by action commands in `../Config.json`.
 
